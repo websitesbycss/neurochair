@@ -35,6 +35,13 @@ The ANT network may have no internet: all dependencies must already be installed
 - Model evaluation: split train/test **by trial, never randomly by sample** (adjacent EEG samples leak).
 - After a live rotation, save any failing recording and add an offline test for it.
 
+## Ideas (`ideas.md`)
+- `ideas.md` is the team's running list of project ideas. When a new idea comes up in conversation, **add it there**.
+- If an existing idea is revised (scope, signals, risks, framing), **update that entry in place** instead of adding a duplicate.
+- If a revision drifts far enough that it is really a different project, **add it as a new idea** and note on the old one what it split into.
+- Keep each entry short: what it does, who it helps, signals used, risks/limits, and how it fits the track (movement as the control default, inclusivity).
+- When the team commits to one idea, record that in `docs/decisions.md`, fill in the interface contract below, and mark it chosen in `ideas.md`.
+
 ## Interface contract (fill in once the movement + app are chosen)
 - Model -> app: TBD, e.g. a class label plus confidence per 0.5 s window.
 - Target movement: TBD. Record decisions in `docs/decisions.md`.

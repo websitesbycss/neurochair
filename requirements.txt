@@ -1,0 +1,7 @@
+pylsl
+mne
+numpy
+scipy
+scikit-learn
+edfio
+pytest

@@ -94,6 +94,25 @@ DEFAULT = ["sync", "baseline", "baseline_closed", "blink", "drowsy", "clench", "
 ALL = DEFAULT + ["focus", "arms", "legs"]
 
 
+# --quick: about 5 minutes. Fewer trials and shorter holds; skips closed-eye baseline, drowsy, face, combined, workload, reading.
+QUICK = {
+    "sync": dict(trials=rep("sync_clench", "clench hard", 3), hold=1, rest=2),
+    "baseline": dict(trials=[("baseline_open", "Relax. Eyes open on the far object. Stay still.")], hold=20, rest=0),
+    "blink": dict(trials=rep("blink_single", "blink", 4) + rep("blink_double", "double blink", 2)
+                  + rep("blink_long", "slow long blink", 2), hold=1.5, rest=2),
+    "clench": dict(trials=rep("clench_short", "clench", 4) + rep("clench_long", "clench and hold", 2), hold=2, rest=2),
+    "eyes": dict(trials=rep("eyes_left", "look left", 2) + rep("eyes_right", "look right", 2), hold=1.5, rest=1.5, shuffle=True),
+    "hands": dict(trials=rep("hand_R", "right hand squeeze", 4) + rep("hand_L", "left hand squeeze", 4),
+                  hold=3, rest=4, shuffle=True),
+    "bicep": dict(trials=rep("bicep_light", "light bicep contraction, about 25 percent", 2)
+                  + rep("bicep_medium", "medium bicep contraction, about 50 percent", 2)
+                  + rep("bicep_hard", "hard bicep contraction, about 80 percent", 2), hold=3, rest=4, shuffle=True),
+    "imagery": dict(trials=rep("imag_R", "imagine right squeeze", 2) + rep("imag_L", "imagine left squeeze", 2),
+                    hold=3, rest=4, shuffle=True),
+}
+QUICK_ORDER = ["sync", "baseline", "blink", "clench", "eyes", "hands", "bicep", "imagery"]
+
+
 class Speaker:
     """Persistent PowerShell speech synthesizer so cues have low latency. Silent no-op if unavailable."""
     def __init__(self, enabled):
@@ -124,14 +143,17 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--blocks", nargs="+", choices=list(BLOCKS))
     ap.add_argument("--all", action="store_true")
+    ap.add_argument("--quick", action="store_true", help="about 5 minutes, essentials only")
     ap.add_argument("--speed", type=float, default=1.0)
     ap.add_argument("--mute", action="store_true", help="no beeps")
     ap.add_argument("--no-window", action="store_true", help="don't open the big-text window for reading blocks")
     ap.add_argument("--speak", action="store_true", help="speak each cue aloud (Windows)")
     ap.add_argument("--auto", action="store_true", help="no Enter between blocks; uses --gap seconds instead")
-    ap.add_argument("--gap", type=float, default=8.0, help="seconds between blocks in --auto mode")
+    ap.add_argument("--gap", type=float, default=None, help="seconds between blocks in --auto mode (default 8, or 2 with --quick)")
     a = ap.parse_args()
-    order = a.blocks or (ALL if a.all else DEFAULT)
+    a.gap = a.gap if a.gap is not None else (2.0 if a.quick else 8.0)
+    B = {**BLOCKS, **{k: {**BLOCKS[k], **v} for k, v in QUICK.items()}} if a.quick else BLOCKS
+    order = a.blocks or (QUICK_ORDER if a.quick else (ALL if a.all else DEFAULT))
     beeps = (lambda f, ms: winsound.Beep(f, ms)) if (winsound and not a.mute) else (lambda f, ms: None)
     voice = Speaker(a.speak)
 
@@ -145,14 +167,14 @@ def main():
     def mark(text):
         outlet.push_sample([text]); log.writerow([time.time(), text]); logf.flush()
 
-    total = sum(len(BLOCKS[b]["trials"]) * (BLOCKS[b]["hold"] + BLOCKS[b]["rest"]) + (a.gap if a.auto else 0) + 3
+    total = sum(len(B[b]["trials"]) * (B[b]["hold"] + B[b]["rest"]) + (a.gap if a.auto else 0) + 3
                 for b in order) / 60
     print(f"Blocks: {order}\nEstimated {total / a.speed:.1f} min. Start the recorder FIRST (src/record_lsl.py).", flush=True)
     voice.say("Starting the session. Sit upright and stay still.")
     time.sleep(3 / a.speed)
     try:
         for b in order:
-            blk = BLOCKS[b]
+            blk = B[b]
             trials = list(blk["trials"])
             if blk.get("shuffle"):
                 rng.shuffle(trials)

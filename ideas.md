@@ -73,6 +73,12 @@ Live feedback showing how strongly the motor cortex is engaging during a movemen
 - Hardware to borrow (check current stock on the Libraries' Technology Lending page; Hunt and Hill): cameras, tablets, Arduino boards, possibly VR gear.
 - Limits: scalp EEG does not measure muscle force. Claim "brain engagement", not "exertion". Not a medical device.
 
+### 4c. Meta Ray-Ban glasses as the output and sensing side (extension to idea 1)
+EEG blink/clench is the control; the glasses are the eyes, ears and voice. Ideas: (a) **audio scanning** over the glasses' open-ear speakers (options read aloud, blink selects), so a blind or low-vision user needs no screen; (b) **"what's in front of me"** on a blink: glasses camera frame goes to a vision model and the answer is spoken; (c) glasses mic detects a noisy environment, and combined with an EEG overload signal the app lowers the load.
+- Developer access: Meta's Wearables Device Access Toolkit is a developer preview (late-2025 sources; check current status). It is for iOS/Android mobile apps, gives camera access, and uses Bluetooth for mic/speakers. Full access may depend on country and sign-up. A Mock Device Kit allows testing without glasses.
+- Risks: needs a phone app bridge (EEG is on the laptop); we may not have glasses. Cheapest version needs no SDK: treat the glasses as a Bluetooth speaker for spoken output.
+- Fits the track: movement (blink/clench) is the control; strong inclusivity angle for blind and low-vision users.
+
 ### 5. Hands-free computer or smart-home control
 Eye movement moves a cursor, a clench clicks, blinks run lights or TV. Same detection code as idea 1.
 
@@ -84,6 +90,59 @@ Workload gauge while someone does a simple task, with a harder condition (e.g. c
 
 ### 8. Walking or cooking monitoring
 Sounds good, high risk. Real full-body motion ruins the signal. Future-work slide only.
+
+### 9. Adaptive instrument / game for creative access
+Blink, clench and eye movement play music or a game, with software that keeps any input musical (scale snapping, auto-harmony, adaptive difficulty). For kids and adults with limited movement who are shut out of music and play. Movement is the control; no LLM needed. Risk: latency must feel instant.
+
+### 10. Reading aid from eye movements (dyslexia, ADHD)
+Frontal channels pick up eye movement. Detect re-reading and stalling, then adapt the text (spacing, focus line, read-aloud). Unique because the activity is everyday reading. Risk: coarse without a real eye tracker; test early.
+- Controlled-distraction extension: add timed distractions to see how reading changes. Frame as a **reading-support insight tool for students and teachers** ("here's where reading slowed or broke down"), NOT a diagnosis. EEG and eye-movement data can't diagnose dyslexia, ADHD or autism, and claiming to would need clinical validation. Suggest a professional evaluation when patterns persist.
+
+### 11. Freezing-of-gait cueing (Parkinson's)
+A motion sensor (e.g. on the Arduino UNO Q) detects a freeze while walking and fires a rhythmic audio or buzz cue, a known intervention. EEG optional (movement preparation). Risk: needs real walking data we can't get; keep to a demo and don't claim clinical benefit.
+
+### 12. Attempted-movement mirror therapy (paralysis, stroke)
+When the person tries to move a limb, motor cortex mu/beta drops; that triggers an on-screen or game limb. Reliable signal, strong rehab rationale. Risk: overlaps idea 4b; could be framed as its patient-facing mode.
+
+### 13. Condition research: where EEG actually helps (summary of what we found)
+- **Good EEG fit:** epilepsy (seizure detection; see idea 4), stroke/paralysis (attempted movement, ideas 4b and 12), Parkinson's freezing of gait (research EEG biomarkers such as midfrontal beta; mostly offline studies, no real-time detection found), ADHD (an EEG theta/beta device is FDA-cleared only as an aid alongside clinical evaluation, ages 6 to 17; neurofeedback evidence is mixed and contradictory).
+- **Weak EEG fit:** insomnia, chronic pain, tinnitus (neurofeedback evidence poor). Don't build on these.
+- **Asthma:** EEG doesn't read breathing. A separate asthma idea would be a **breathing coach** using phone camera chest-motion, a chest motion sensor (UNO Q) or phone mic. Research exists (a UK app combining chest motion and breath sounds is in development; camera respiratory-rate apps lack clinical validation). Mostly non-EEG, so it fits the track poorly. No diagnosis or inhaler claims.
+
+### 14. Brainstorm: not condition-specific (all use movement as control; none chosen)
+- **Assistive robot arm:** jaw clench or blink drives a small tabletop arm (servos on the Arduino UNO Q) to bring a cup or spoon. Strong physical demo. Risk: build time, safety (small, slow, low force).
+- **Alertness guard (drowsy driving):** blink duration and rate (Fp1/Fp2) plus head movement flag drowsiness and trigger a warning. Established markers; scalable to any headband. Camera-only version (webcam or GoPro + pose/eye-closure model) works without a headset. Demo: laptop driving game, with eye closure acted on cue (we can't safely induce real drowsiness, so no claim of validated detection).
+- **Auto-rewind study aid:** detects attention drifting and rewinds the last 30 seconds of a lecture video. Risk: attention detection is only moderately reliable.
+- **Hands-busy mode:** cooks, mechanics and surgeons clench or blink to advance step-by-step instructions while a camera and AI identify where they are. Situational need, easy to explain.
+- **Silent remote:** discreet input where hands and voice are out (meetings, classrooms, noisy sites). Gimmicky but a good way to run our own presentation slides.
+- **Drone or RC car control:** eye and jaw movements steer it. Cool, but needs a clearer "useful" angle.
+
+### 15. Phantom-squeeze yes/no for people who can't move or speak (coma, brain injury)
+Imagined left-hand squeeze = "yes", right-hand = "no" (motor imagery: mu/beta drop over C4 or C3). Aimed at people who may understand but can't move or speak. Research exists on detecting awareness this way, but it's hard and high-stakes.
+- Risks: untrained users are often only about 70 to 80% accurate, patients likely lower; we can only test on healthy volunteers; our first pilot recording showed nothing clear at C3/C4 (unlabelled, noisy). Needs many trials and a confidence score, never a single answer. Frame as a research prototype; never claim it measures consciousness or replace a clinician.
+- Needs a proper cued left/right imagery dataset (about 20 trials per hand) from the next rotation.
+
+### 16. Assistive smart glove (tendon glove driven by servos)
+Gardening glove with fishing-line "tendons" to the fingers, pulled by servos at the wrist (UNO Q drives them), to help elderly people with weakened grip close the hand when they try to squeeze. Frame as grip assistance, not treatment.
+- Trigger: attempted-grip EEG is the weakest signal we have; start with a reliable trigger (jaw clench or blink) and swap in attempted grip if it works.
+- Safety: low-torque servos, force and speed limits, user can always overpower it, instant stop. Never let a noisy classifier drive a strong pull.
+- Parts: servos and fishing line are not in the library list (buy); 3D printer (Prusa), soldering station and multimeter are available; power bank for portable power.
+- Ties to 15: same core signal (left/right hand intent); the glove closing is also movement feedback for the user.
+
+### 17. Cheap hardware options (no purchases; borrow from Hunt/Hill)
+Servo glove was judged too expensive and difficult (about $30 to $40 per servo plus build). Alternatives using borrowed gear and the Arduino UNO Q:
+- **Bedside call and yes/no beacon:** blink or clench patterns (triple blink = call, left/right = yes/no) show on the UNO Q's LED matrix and sound on a borrowed Bluetooth speaker. For someone who can't reach a call button. No parts to buy. Verify the UNO Q matrix and how it connects before committing.
+- **Sphero BOLT steering:** blink, clench or hand intent drives a borrowed robotic ball through its Python library. Easy and visual; weaker "useful" angle (frame as remote errands or mobility proxy). Check library support for BOLT.
+- **Page turner:** SK Remote Controlled Page Turner (Hill) triggered by the UNO Q wired across its remote button. Medium difficulty, needs soldering; software-only fallback is blink/clench flipping pages on a laptop PDF or Kindle app.
+- **Camera-only drowsy-driving alert:** webcam or GoPro, no extra hardware.
+
+## Things AI has made newly possible (pitch framing: "this wasn't feasible 10 years ago")
+- **LLM-boosted communication** (idea 2): older word prediction was simple statistics; LLMs can expand abbreviations and propose whole replies (Google SpeakFaster, ALS eye-gaze users).
+- **Phone-camera form tracking** (4b): real-time pose estimation on a phone, where this used to need Kinect or motion-capture hardware.
+- **LLM coaching and reports** (4b): turning raw session data into plain-language feedback and therapist summaries.
+- **On-device vision for blind/low-vision users** (4c): scene description that can run on a phone without internet (vendor claims, unverified).
+- **EEG foundation models** (LaBraM, CBraMod): pretrained on thousands of hours of EEG to need less per-user training. Cross-subject variability is still the open problem; no live zero-calibration result found, so don't rely on it this weekend.
+- **LLM-assisted speech neuroprostheses:** implant-based systems reached 62 words per minute for an ALS patient in 2023. Implants only; useful for a "where this is heading" slide, not for scalp EEG.
 
 ## Cross-cutting
 - **Scalable story:** LSL means any headset works. Input can later swap to a cheap headband, EMG band or webcam. Calibration is about a minute per person. Open source.

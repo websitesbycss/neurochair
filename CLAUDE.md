@@ -42,6 +42,10 @@ The ANT network may have no internet: all dependencies must already be installed
 - Keep each entry short: what it does, who it helps, signals used, risks/limits, and how it fits the track (movement as the control default, inclusivity).
 - When the team commits to one idea, record that in `docs/decisions.md`, fill in the interface contract below, and mark it chosen in `ideas.md`.
 
-## Interface contract (fill in once the movement + app are chosen)
-- Model -> app: TBD, e.g. a class label plus confidence per 0.5 s window.
-- Target movement: TBD. Record decisions in `docs/decisions.md`.
+## Interface contract (decoder -> wheelchair driver)
+- Driver: `src/app/chair_drive.py` (two BOLTs as one chair; arrow keys are the backup control). Run with `--lsl` to accept decoder commands.
+- Decoder sends JSON strings on an LSL marker stream named `ChairCommands` (type `Markers`, 1 channel, string):
+  - `{"cmd": "go", "dest": "Kitchen"}` (dest one of Bed, Door, Kitchen, Bathroom, Center; routes in `ROUTES`)
+  - `{"cmd": "forward"|"back"|"left"|"right"|"slide_left"|"slide_right", "seconds": 1.0}`
+  - `{"cmd": "brake"}` (latches a stop; always wins), `{"cmd": "resume"}`, `{"cmd": "stop"}`
+- Priority: brake > keyboard (the user) > decoder/autopilot. Target signals: SSVEP destination choice + brake (ideas.md #18).

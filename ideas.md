@@ -173,8 +173,9 @@ Servo glove was judged too expensive and difficult (about $30 to $40 per servo p
   - Sideways: both balls heading 90 degrees off chair-forward (the casters swing round).
   - Spin in place: balls drive in opposite directions along y; the chair pivots about the point between them.
 - Heading is in each BOLT's own gyro frame, fixed in the world, not the chair. Before driving, "aim" both balls so heading 0 = chair forward. After the chair turns, add the turned angle to later headings (track it open-loop by integrating w, or re-aim).
-- Software options (verify first): the `spherov2` Python library over Bluetooth LE (BOLT support and two balls at once from one laptop both still to confirm); the Sphero Edu app as a manual fallback, but it can't take EEG input.
+- Software (verified Sat night on Cameron's laptop): the unofficial `spherov2` Python library + `bleak` (now in requirements.txt). Both BOLTs found by Bluetooth scan: **SB-0A38** (left, lit blue "L") and **SB-61AA** (right, lit red "R"). **Both connect at once from one laptop** (about 12 s to connect) using `SpheroEduAPI`; LEDs and matrix work. Driving not tested yet. Only one app can hold a ball at a time: close the Sphero Edu app / phone Bluetooth before running Python.
 - Always have a big STOP key and a low speed cap (start around 40-60 out of 255).
+- **Driver built: `src/app/chair_drive.py`.** Arrow-key backup control plus decoder commands over LSL (`ChairCommands`, format in CLAUDE.md). Aim mode at startup (back lights to the back of the chair), Space = brake, speed cap 50 by default, tandem kinematics unit-tested (`tests/test_chair_drive.py`), connects to both BOLTs. Not yet driven on the real chair; routes in `ROUTES` are placeholders to tune on the table.
 
 **EEG side (from the teammates' recording)**
 - Recording: `data/Danil_Bogdanov_2026-11-07_18-28-42.cnt` (16.3 min, 24 ch, 500 Hz, 531 markers from an LSL stream named `WheelchairMarkers`). Local only: `data/` is gitignored, so get the file from whoever recorded it. Read it with `mne.io.read_raw_ant` (needs `antio`, in requirements.txt). Channel names are partly lowercase (`c3`, `oz`, ...): match them case-insensitively.

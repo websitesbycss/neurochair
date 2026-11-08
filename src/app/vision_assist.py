@@ -8,6 +8,7 @@ Usage:
     python src/app/vision_assist.py --list           # which camera indices work
     python src/app/vision_assist.py --webcam 1       # live camera (GoPro webcam is usually not 0)
     python src/app/vision_assist.py --image pic.jpg  # one image, saves pic_detected.jpg
+    python src/app/vision_assist.py --gopro-usb      # GoPro over USB directly (quit the GoPro Webcam app first)
     python src/app/vision_assist.py --gopro          # GoPro Wi-Fi preview (laptop on the GoPro's Wi-Fi)
     add --no-voice to print instead of speaking
 The first run downloads the YOLO model weights (needs internet once).
@@ -41,6 +42,39 @@ def phrases(res, width):
     return out
 
 
+def find_gopro_usb_ip():
+    """The GoPro's USB network gives the laptop 172.2X.1YZ.5x; the camera is .51 on that subnet."""
+    import re
+    import subprocess
+    out = subprocess.run(["ipconfig"], capture_output=True, text=True).stdout
+    for ip in re.findall(r"IPv4 Address[ .]*: (172\.2\d\.1\d\d\.\d+)", out):
+        return ip.rsplit(".", 1)[0] + ".51"
+    raise SystemExit("No GoPro USB network found. Is the GoPro plugged in and switched on?")
+
+
+def start_gopro_usb(ip, res):
+    """Start webcam mode over USB and keep the camera awake. Video arrives on udp://@0.0.0.0:8554."""
+    import os
+    import threading
+    import requests
+    ip = find_gopro_usb_ip() if ip == "auto" else ip
+    base = f"http://{ip}:8080/gopro"
+    requests.get(f"{base}/webcam/stop", timeout=5)
+    time.sleep(1)
+    r = requests.get(f"{base}/webcam/start", params={"res": res, "fov": 0}, timeout=5).json()
+    print(f"GoPro at {ip}: webcam start -> {r}", flush=True)
+    os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "fflags;nobuffer|flags;low_delay")
+
+    def keep_alive():
+        while True:
+            try:
+                requests.get(f"{base}/camera/keep_alive", timeout=3)
+            except Exception:
+                pass
+            time.sleep(2.5)
+    threading.Thread(target=keep_alive, daemon=True).start()
+
+
 def list_cameras():
     import cv2
     for i in range(6):
@@ -58,6 +92,9 @@ def main():
     ap.add_argument("--gopro", action="store_true")
     ap.add_argument("--conf", type=float, default=0.5)
     ap.add_argument("--no-voice", action="store_true")
+    ap.add_argument("--gopro-usb", nargs="?", const="auto", default=None,
+                    help="read the GoPro directly over USB (quit the GoPro Webcam app first); optional camera IP")
+    ap.add_argument("--res", type=int, default=7, help="GoPro webcam resolution: 4=480p, 7=720p, 12=1080p")
     a = ap.parse_args()
 
     if a.list:
@@ -76,36 +113,121 @@ def main():
         print("saved", out)
         return
 
-    voice = None
-    if not a.no_voice:
-        import pyttsx3
-        voice = pyttsx3.init()
     if a.gopro:
         import requests
         requests.get("http://10.5.5.9:8080/gopro/camera/stream/start", timeout=5)
-        cap = cv2.VideoCapture("udp://@0.0.0.0:8554", cv2.CAP_FFMPEG)
-    else:
-        cap = cv2.VideoCapture(a.webcam if a.webcam is not None else 0, cv2.CAP_DSHOW)
+    if a.gopro_usb:
+        start_gopro_usb(a.gopro_usb, a.res)
 
-    last_said = {}
-    while True:
-        ok, frame = cap.read()
-        if not ok:
-            time.sleep(0.05)
-            continue
-        res = model(frame, verbose=False, conf=a.conf)[0]
-        for p in phrases(res, frame.shape[1]):
-            if time.time() - last_said.get(p, 0) > REPEAT_S:
-                last_said[p] = time.time()
-                print(p, flush=True)
-                if voice:
-                    voice.say(p)
-                    voice.runAndWait()
-        cv2.imshow("vision assist (q to quit)", res.plot())
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
-    cap.release()
-    cv2.destroyAllWindows()
+    def open_cap():
+        if a.gopro or a.gopro_usb:
+            return cv2.VideoCapture("udp://@0.0.0.0:8554", cv2.CAP_FFMPEG)
+        cap = cv2.VideoCapture(a.webcam if a.webcam is not None else 0, cv2.CAP_DSHOW)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        return cap
+
+    cam = LatestFrame(open_cap)
+    voice = None if a.no_voice else Speaker()
+    last_said, t_prev = {}, time.time()
+    try:
+        while True:
+            frame, age = cam.get()
+            if frame is None:
+                time.sleep(0.02)
+                continue
+            if age > 3.0:                       # feed stalled: reconnect instead of freezing
+                print("camera feed stalled, reconnecting...", flush=True)
+                cam.restart()
+                continue
+            res = model(frame, verbose=False, conf=a.conf, imgsz=640)[0]
+            for p in phrases(res, frame.shape[1]):
+                if time.time() - last_said.get(p, 0) > REPEAT_S:
+                    last_said[p] = time.time()
+                    print(p, flush=True)
+                    if voice:
+                        voice.say(p)
+            view = res.plot()
+            now = time.time()
+            cv2.putText(view, f"{1 / max(now - t_prev, 1e-3):4.1f} fps", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                        (0, 255, 0), 2)
+            t_prev = now
+            cv2.imshow("vision assist (q to quit)", view)
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
+    finally:
+        cam.stop()
+        cv2.destroyAllWindows()
+
+
+class LatestFrame:
+    """Reads the camera on a background thread and keeps only the newest frame, so a slow detector
+    never makes the video fall behind. Reports how old the newest frame is so stalls can be caught."""
+
+    def __init__(self, opener):
+        import threading
+        self.opener, self.lock, self.running = opener, threading.Lock(), True
+        self.frame, self.stamp = None, 0.0
+        self.cap = opener()
+        self.thread = threading.Thread(target=self._loop, daemon=True)
+        self.thread.start()
+
+    def _loop(self):
+        black_since = None
+        while self.running:
+            ok, frame = self.cap.read()
+            if not ok or frame is None:
+                time.sleep(0.01)
+                continue
+            if frame.mean() < 3:                # all-black frames count as a stall
+                black_since = black_since or time.time()
+                if time.time() - black_since > 2:
+                    continue
+            else:
+                black_since = None
+            with self.lock:
+                self.frame, self.stamp = frame, time.time()
+
+    def get(self):
+        with self.lock:
+            if self.frame is None:
+                return None, 0.0
+            return self.frame, time.time() - self.stamp
+
+    def restart(self):
+        with self.lock:
+            self.cap.release()
+            self.cap = self.opener()
+            self.frame, self.stamp = None, 0.0
+
+    def stop(self):
+        self.running = False
+        self.thread.join(timeout=1)
+        self.cap.release()
+
+
+class Speaker:
+    """Speaks on its own thread so the video never waits for speech. Drops stale phrases."""
+
+    def __init__(self):
+        import queue
+        import threading
+        self.q = queue.Queue()
+        threading.Thread(target=self._loop, daemon=True).start()
+
+    def say(self, text):
+        while not self.q.empty():               # only the newest announcement matters
+            try:
+                self.q.get_nowait()
+            except Exception:
+                break
+        self.q.put(text)
+
+    def _loop(self):
+        import pyttsx3
+        engine = pyttsx3.init()                  # pyttsx3 must live on the thread that uses it
+        while True:
+            engine.say(self.q.get())
+            engine.runAndWait()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,3 @@
+analysis/out/events_*_with_cnt.csv
+analysis/out/evt_markers*.csv
+analysis/out/align_log.txt

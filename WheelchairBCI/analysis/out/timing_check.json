@@ -1,0 +1,80 @@
+{
+ "itpc": [
+  {
+   "target": "Bathroom",
+   "harmonic": "2f",
+   "cnt": 0.6756160505697225,
+   "lsl": 0.2621498964870083
+  },
+  {
+   "target": "Bathroom",
+   "harmonic": "f",
+   "cnt": 0.848906511346216,
+   "lsl": 0.6874559498258841
+  },
+  {
+   "target": "Bed",
+   "harmonic": "2f",
+   "cnt": 0.8505422613843985,
+   "lsl": 0.6486661591583596
+  },
+  {
+   "target": "Bed",
+   "harmonic": "f",
+   "cnt": 0.5391393565523624,
+   "lsl": 0.5232817016271466
+  },
+  {
+   "target": "Door",
+   "harmonic": "2f",
+   "cnt": 0.7461343399577443,
+   "lsl": 0.6868840470789929
+  },
+  {
+   "target": "Door",
+   "harmonic": "f",
+   "cnt": 0.5512592257085501,
+   "lsl": 0.5364862851822377
+  },
+  {
+   "target": "Kitchen",
+   "harmonic": "2f",
+   "cnt": 0.8455080804132623,
+   "lsl": 0.6035195180854162
+  },
+  {
+   "target": "Kitchen",
+   "harmonic": "f",
+   "cnt": 0.48807164458257546,
+   "lsl": 0.4149789481827619
+  }
+ ],
+ "itpc_null_12Hz": {
+  "mean": 0.3024032786912143,
+  "p95": 0.4701100080341671
+ },
+ "vep_flicker_on_lsl": {
+  "n": 50,
+  "oz_peak_uV": 3.8180266450855145
+ },
+ "vep_flicker_on_cnt": {
+  "n": 50,
+  "oz_peak_uV": 4.970037385863221
+ },
+ "vep_appear_lsl_run1": {
+  "n": 40,
+  "oz_peak_uV": 4.025014690555644
+ },
+ "vep_appear_lsl_run2": {
+  "n": 40,
+  "oz_peak_uV": 6.09655773373185
+ },
+ "vep_appear_cnt_run1": {
+  "n": 40,
+  "oz_peak_uV": 6.7781423672867405
+ },
+ "vep_appear_cnt_run2": {
+  "n": 40,
+  "oz_peak_uV": 6.233663035714153
+ }
+}

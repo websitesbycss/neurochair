@@ -1,0 +1,9 @@
+numpy
+scipy
+mne>=1.9
+antio
+scikit-learn
+pandas
+matplotlib
+tabulate
+pytest

@@ -1,0 +1,31 @@
+WHEELCHAIR BCI - RECORDING (run on the computer that is on the same Wi-Fi as the ANT laptop)
+
+ONE-TIME SETUP (needs internet; Python 3.9+ must be installed)
+  Mac:      cd into this folder, then
+              python3 -m venv .venv
+              .venv/bin/pip install -r requirements.txt
+  Windows:  open PowerShell in this folder, then
+              py -m venv .venv
+              .venv\Scripts\pip install -r requirements.txt
+  (Below, PY means  .venv/bin/python  on Mac  or  .venv\Scripts\python  on Windows)
+
+1) Check the screen (10 s of flicker; should print ~60 or 120 Hz, jitter < 2 ms):
+      PY wheelchair_record.py --check-display
+
+2) Find the ANT EEG stream (look for type=EEG, ~24 ch, fs=500):
+      PY wheelchair_record.py --list-streams
+
+3a) DIRECTION (SSVEP) recording, ~8 min:
+      PY wheelchair_record.py --subject S1 --record-eeg --blocks sync,rest,ssvep,ssvep,sync
+
+3b) BRAKE recording, ~11 min:
+      PY wheelchair_record.py --subject S1 --record-eeg --blocks sync,brake,brake,artifacts,sync
+
+   (Full session in one go instead: PY wheelchair_record.py --subject S1 --record-eeg )
+   If several EEG streams are listed, add:  --eeg-name <part of its name>
+
+KEYS: click the window first.  SPACE = brake (brake game only)   P = pause   ESC = stop (data is saved)
+
+AFTER EACH RUN: send back EVERY file in the data/ folder:
+   S1_<time>_wc_events.csv   S1_<time>_wc_eeg.npz   S1_<time>_wc_config.json
+The terminal must have printed "EEG saved: ... x 24 ch". If it says "No EEG samples", the stream was not recorded.

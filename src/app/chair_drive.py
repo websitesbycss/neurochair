@@ -23,6 +23,10 @@ Decoder commands (JSON strings on an LSL marker stream named "ChairCommands"):
     {"cmd": "forward"|"back"|"left"|"right"|"slide_left"|"slide_right", "seconds": 1.0}
     {"cmd": "go", "dest": "Kitchen"}      runs a route from ROUTES
     {"cmd": "stop"} / {"cmd": "brake"} / {"cmd": "resume"}
+Co-pilot safety stops (sent by vision_assist.py / sound_assist.py with --chair):
+    {"cmd": "hold", "reason": "person ahead", "seconds": 1.0}
+    stops the chair while active and pauses any route; it can never start or redirect the chair.
+Several senders can run at once (decoder, camera, sound): each is a ChairCommands stream.
 """
 import argparse
 import json
@@ -78,6 +82,11 @@ def apply_command(st, text):
     except (TypeError, ValueError):
         return None
     cmd = c.get("cmd")
+    if cmd == "hold":                                  # co-pilot safety stop: can only stop, never start
+        st["hold_until"] = max(st.get("hold_until", 0.0), time.time() + float(c.get("seconds", 1.0)))
+        st["hold_reason"] = str(c.get("reason", "co-pilot"))
+        st["source"] = f"co-pilot: {st['hold_reason']}"
+        return st["source"]
     if cmd == "brake":
         st.update(brake=True, auto=[])
     elif cmd == "resume":
@@ -92,6 +101,34 @@ def apply_command(st, text):
         return None
     st["source"] = f"decoder: {text}"
     return st["source"]
+
+
+def choose_motion(st, user, now, dt):
+    """One control tick. user = (v, u, w) from the keyboard. Returns (v, u, w, status).
+
+    Priority: brake > user (keyboard) > co-pilot hold > autopilot route. A hold pauses a route
+    (it resumes where it left off once the hold expires); it can never start or redirect the chair.
+    """
+    v, u, w = user
+    if st["brake"]:
+        return 0, 0, 0, "BRAKED"
+    if v or u or w:
+        st["auto"], st["source"] = [], "keyboard"
+        return v, u, w, "MOVING"
+    if now < st.get("hold_until", 0.0):
+        if st["auto"] and st["auto_until"]:
+            st["auto_until"] += dt                     # pause the route, don't skip it
+        return 0, 0, 0, "HOLD"
+    if st["auto"]:
+        if st["auto_until"] == 0.0:
+            st["auto_until"] = now + st["auto"][0][3]
+        if now >= st["auto_until"]:
+            st["auto"].pop(0)
+            st["auto_until"] = now + st["auto"][0][3] if st["auto"] else 0.0
+        if st["auto"]:
+            v, u, w = st["auto"][0][:3]
+            return v, u, w, "MOVING"
+    return 0, 0, 0, "READY"
 
 
 def yaw_rate_deg(w, max_speed):
@@ -179,12 +216,26 @@ def main():
     balls.light((0, 0, 255), (255, 0, 0))
     balls.aim_light(True)
 
-    lsl = {"inlet": None, "next_try": 0.0}
+    lsl = {"inlets": {}}
     if a.lsl:
-        print("LSL: listening for the ChairCommands stream (keys work meanwhile)", flush=True)
+        print("LSL: listening for ChairCommands streams (decoder, camera, sound); keys work meanwhile", flush=True)
+
+        def find_senders():                          # background: every sender, any start order, no UI stalls
+            import threading
+            from pylsl import StreamInlet, resolve_byprop
+
+            def loop():
+                while True:
+                    for s in resolve_byprop("name", "ChairCommands", minimum=20, timeout=1.0):
+                        if s.source_id() not in lsl["inlets"]:
+                            lsl["inlets"][s.source_id()] = StreamInlet(s)
+                            print(f"LSL: connected to ChairCommands from {s.source_id()}", flush=True)
+                    time.sleep(1.0)
+            threading.Thread(target=loop, daemon=True).start()
+        find_senders()
 
     st = dict(mode="AIM", sel=0, aim=[0, 0], keys=set(), brake=False, yaw=0.0, max=a.max_speed,
-              auto=[], auto_until=0.0, source="-")
+              auto=[], auto_until=0.0, source="-", hold_until=0.0, hold_reason="", last_tick=time.time())
 
     root = tk.Tk()
     root.title("Sphero wheelchair")
@@ -232,20 +283,13 @@ def main():
     def read_lsl():
         if not a.lsl:
             return
-        if lsl["inlet"] is None:                       # keep looking, so start order doesn't matter
-            if time.time() < lsl["next_try"]:
-                return
-            from pylsl import StreamInlet, resolve_byprop
-            found = resolve_byprop("name", "ChairCommands", timeout=0.1)
-            lsl["next_try"] = time.time() + 2.0
-            if not found:
-                return
-            lsl["inlet"] = StreamInlet(found[0])
-            print("LSL: connected to ChairCommands", flush=True)
-        msgs, _ = lsl["inlet"].pull_chunk(timeout=0.0)
-        for (m,) in msgs:
-            got = apply_command(st, m)
-            print(f"received {m}" + ("" if got else "  (ignored)"), flush=True)
+        for inlet in list(lsl["inlets"].values()):
+            msgs, _ = inlet.pull_chunk(timeout=0.0)
+            for (m,) in msgs:
+                got = apply_command(st, m)
+                if not (got or "").startswith("co-pilot") or st["hold_reason"] != st.get("_last_reason"):
+                    print(f"received {m}" + ("" if got else "  (ignored)"), flush=True)
+                st["_last_reason"] = st["hold_reason"]
 
     def tick():
         read_lsl()
@@ -257,34 +301,24 @@ def main():
             root.after(int(TICK_S * 1000), tick)
             return
         k = st["keys"]
-        v = (1 if "Up" in k else 0) - (1 if "Down" in k else 0)
-        u = (1 if ("d" in k or "D" in k) else 0) - (1 if ("a" in k or "A" in k) else 0)
-        w = a.turn * ((1 if "Left" in k else 0) - (1 if "Right" in k else 0))
-        if v or u or w:
-            st["auto"], st["source"] = [], "keyboard"
-        elif st["auto"]:
-            now = time.time()
-            if st["auto_until"] == 0.0:
-                st["auto_until"] = now + st["auto"][0][3]
-            if now >= st["auto_until"]:
-                st["auto"].pop(0)
-                st["auto_until"] = 0.0
-            if st["auto"]:
-                v, u, w = st["auto"][0][:3]
-        if st["brake"]:
-            v = u = w = 0
+        user = ((1 if "Up" in k else 0) - (1 if "Down" in k else 0),
+                (1 if ("d" in k or "D" in k) else 0) - (1 if ("a" in k or "A" in k) else 0),
+                a.turn * ((1 if "Left" in k else 0) - (1 if "Right" in k else 0)))
+        now = time.time()
+        dt, st["last_tick"] = now - st["last_tick"], now
+        v, u, w, status = choose_motion(st, user, now, dt)
         cmds = ball_commands(v, u, w, st["yaw"], st["max"])
-        if v == u == w == 0:
-            balls.stop() if st["brake"] else balls.drive(cmds)
+        if status in ("BRAKED", "HOLD"):
+            balls.stop()
+        elif v == u == w == 0:
+            balls.drive(cmds)
         else:
             balls.drive(cmds)
-            st["yaw"] = (st["yaw"] + yaw_rate_deg(w, st["max"]) * TICK_S) % 360
-        if st["brake"]:
-            big.config(text="BRAKED (Space to release)", bg="#c1121f")
-        elif v or u or w:
-            big.config(text="MOVING", bg="#15803d")
-        else:
-            big.config(text="READY", bg="#374151")
+            st["yaw"] = (st["yaw"] + yaw_rate_deg(w, st["max"]) * dt) % 360
+        big.config(**{"BRAKED": dict(text="BRAKED (Space to release)", bg="#c1121f"),
+                      "HOLD": dict(text=f"STOPPED: {st['hold_reason']}", bg="#d97706"),
+                      "MOVING": dict(text="MOVING", bg="#15803d"),
+                      "READY": dict(text="READY", bg="#374151")}[status])
         (hl, sl), (hr, sr) = cmds
         info.config(text=f"speed cap {st['max']} / 255     estimated chair turn {st['yaw']:5.0f} deg\n"
                          f"left ball  heading {hl:3d}  speed {sl:4d}\n"

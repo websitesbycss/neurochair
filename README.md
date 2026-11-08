@@ -47,7 +47,7 @@ python -m venv .venv
 ```
 - Drive with the keyboard: `python src/app/chair_drive.py` (`--sim` without robots)
 - Drive with EEG: `python src/app/chair_drive.py --lsl`, then `python src/app/ssvep_live.py` (headset streaming on LSL)
-- Camera co-pilot: `python src/app/vision_assist.py --gopro-usb`; sound alerts: `python src/app/sound_assist.py`
+- Supervised autopilot (all together): `chair_drive.py --lsl`, `ssvep_live.py`, `vision_assist.py --gopro-usb --chair`, `sound_assist.py --chair`. A close obstacle in the camera's path or an alarm/doorbell pauses the chair; it resumes the route when clear. Keyboard and brake always win.
 
 ## Limitations
 Research prototype, not a medical device. One healthy subject, one session. The chair is a tabletop model; the co-pilot only stops or pauses (it doesn't steer around obstacles). Some electrodes (Cz, C4, M2) had poor contact in the recorded session and were excluded.

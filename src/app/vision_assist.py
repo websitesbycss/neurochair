@@ -11,6 +11,7 @@ Usage:
     python src/app/vision_assist.py --gopro-usb      # GoPro over USB directly (quit the GoPro Webcam app first)
     python src/app/vision_assist.py --gopro          # GoPro Wi-Fi preview (laptop on the GoPro's Wi-Fi)
     add --no-voice to print instead of speaking
+    add --chair to send safety holds to chair_drive.py --lsl (close obstacle in the middle of the view)
 The first run downloads the YOLO model weights (needs internet once).
 
 GoPro over Wi-Fi (Open GoPro HTTP API; check the docs for your firmware):
@@ -40,6 +41,25 @@ def phrases(res, width):
             x0, _, x1, _ = box.xyxy[0].tolist()
             out.append(f"{ALERT[name]} {where((x0 + x1) / 2, width)}")
     return out
+
+
+# Things that should stop the chair when they're close and in its path (--chair).
+OBSTACLES = {"person", "dog", "cat", "chair", "bench", "bicycle", "backpack", "suitcase", "potted plant", "couch"}
+CLOSE_FRAC = 0.35   # box at least this tall (fraction of the frame height) counts as close
+HOLD_S = 1.0        # each hold lasts this long; resent while the obstacle stays
+
+
+def box_list(res):
+    return [(res.names[int(b.cls)], *b.xyxy[0].tolist()) for b in res.boxes]
+
+
+def obstacle_ahead(boxes, width, height, close_frac=CLOSE_FRAC):
+    """boxes: [(name, x0, y0, x1, y1)]. Returns e.g. "person ahead" when an obstacle is close and in the
+    middle third of the view (the chair's path), else None."""
+    for name, x0, y0, x1, y1 in boxes:
+        if name in OBSTACLES and where((x0 + x1) / 2, width) == "ahead" and (y1 - y0) >= close_frac * height:
+            return f"{ALERT.get(name, name)} ahead"
+    return None
 
 
 def find_gopro_usb_ip():
@@ -95,6 +115,7 @@ def main():
     ap.add_argument("--gopro-usb", nargs="?", const="auto", default=None,
                     help="read the GoPro directly over USB (quit the GoPro Webcam app first); optional camera IP")
     ap.add_argument("--res", type=int, default=7, help="GoPro webcam resolution: 4=480p, 7=720p, 12=1080p")
+    ap.add_argument("--chair", action="store_true", help="send safety holds to chair_drive.py --lsl")
     a = ap.parse_args()
 
     if a.list:
@@ -129,6 +150,11 @@ def main():
     cam = LatestFrame(open_cap)
     voice = None if a.no_voice else Speaker()
     last_said, t_prev = {}, time.time()
+    outlet, last_hold = None, 0.0
+    if a.chair:
+        from pylsl import StreamInfo, StreamOutlet
+        outlet = StreamOutlet(StreamInfo("ChairCommands", "Markers", 1, 0, "string", "chair-cmd-vision"))
+        print("Co-pilot: sending safety holds to the chair (ChairCommands)", flush=True)
     try:
         while True:
             frame, age = cam.get()
@@ -140,6 +166,15 @@ def main():
                 cam.restart()
                 continue
             res = model(frame, verbose=False, conf=a.conf, imgsz=640)[0]
+            blocked = obstacle_ahead(box_list(res), frame.shape[1], frame.shape[0]) if outlet else None
+            if blocked and time.time() - last_hold > 0.3:
+                import json
+                if time.time() - last_hold > 2.0:          # newly blocked: say why we're stopping
+                    print(f"HOLD: {blocked}", flush=True)
+                    if voice:
+                        voice.say(f"Stopping, {blocked}")
+                outlet.push_sample([json.dumps({"cmd": "hold", "reason": blocked, "seconds": HOLD_S})])
+                last_hold = time.time()
             for p in phrases(res, frame.shape[1]):
                 if time.time() - last_said.get(p, 0) > REPEAT_S:
                     last_said[p] = time.time()
@@ -151,6 +186,8 @@ def main():
             cv2.putText(view, f"{1 / max(now - t_prev, 1e-3):4.1f} fps", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1,
                         (0, 255, 0), 2)
             t_prev = now
+            if blocked:
+                cv2.putText(view, f"CHAIR STOPPED: {blocked}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 140, 255), 3)
             cv2.imshow("vision assist (q to quit)", view)
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break

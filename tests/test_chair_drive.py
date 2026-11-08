@@ -74,3 +74,43 @@ def test_decoder_move_and_garbage():
     assert st["auto"] == [[0, 0, 1, 0.5]]
     assert apply_command(st, "not json") is None
     assert apply_command(st, '{"cmd": "go", "dest": "Mars"}') is None
+
+
+# ---- supervised autopilot: priority rules (brake > user > co-pilot hold > route)
+def _drive_state(**kw):
+    st = dict(brake=False, auto=[], auto_until=0.0, source="-", hold_until=0.0, hold_reason="")
+    st.update(kw)
+    return st
+
+
+def test_brake_beats_everything():
+    from app.chair_drive import choose_motion
+    st = _drive_state(brake=True, hold_until=99.0, auto=[[1, 0, 0, 5.0]])
+    assert choose_motion(st, (1, 0, 0), now=10.0, dt=0.1)[3] == "BRAKED"
+
+
+def test_user_overrides_copilot_hold():
+    from app.chair_drive import choose_motion
+    st = _drive_state(hold_until=99.0)
+    assert choose_motion(st, (1, 0, 0), now=10.0, dt=0.1) == (1, 0, 0, "MOVING")
+
+
+def test_hold_stops_route_and_pauses_it():
+    from app.chair_drive import choose_motion
+    st = _drive_state(auto=[[1, 0, 0, 2.0]])
+    assert choose_motion(st, (0, 0, 0), now=10.0, dt=0.1)[3] == "MOVING"    # route starts, ends at 12.0
+    st["hold_until"] = 13.0
+    for t in (10.5, 11.0, 11.5, 12.0, 12.5):                                  # 2.5 s of hold
+        assert choose_motion(st, (0, 0, 0), now=t, dt=0.5)[3] == "HOLD"
+    v, _, _, status = choose_motion(st, (0, 0, 0), now=13.1, dt=0.6)
+    assert status == "MOVING" and v == 1                                      # resumes, not skipped
+    assert st["auto_until"] > 14.0
+
+
+def test_hold_never_starts_the_chair():
+    from app.chair_drive import apply_command, choose_motion
+    st = _drive_state()
+    assert apply_command(st, '{"cmd": "hold", "reason": "person ahead", "seconds": 1}').startswith("co-pilot")
+    assert st["hold_reason"] == "person ahead"
+    assert choose_motion(st, (0, 0, 0), now=st["hold_until"] - 0.5, dt=0.1)[:3] == (0, 0, 0)
+    assert choose_motion(st, (0, 0, 0), now=st["hold_until"] + 1, dt=0.1) == (0, 0, 0, "READY")

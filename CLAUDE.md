@@ -48,4 +48,6 @@ The ANT network may have no internet: all dependencies must already be installed
   - `{"cmd": "go", "dest": "Kitchen"}` (dest one of Bed, Door, Kitchen, Bathroom, Center; routes in `ROUTES`)
   - `{"cmd": "forward"|"back"|"left"|"right"|"slide_left"|"slide_right", "seconds": 1.0}`
   - `{"cmd": "brake"}` (latches a stop; always wins), `{"cmd": "resume"}`, `{"cmd": "stop"}`
-- Priority: brake > keyboard (the user) > decoder/autopilot. Target signals: SSVEP destination choice + brake (ideas.md #18).
+  - Co-pilot: `{"cmd": "hold", "reason": "person ahead", "seconds": 1.0}` stops the chair while active and pauses any route; it can never start or redirect it. Sent by `vision_assist.py --chair` and `sound_assist.py --chair`.
+  - Several senders at once are fine: each is its own `ChairCommands` stream (different source_id).
+- Priority: brake > keyboard (the user) > co-pilot hold > decoder route. Target signals: SSVEP destination choice + brake (ideas.md #18).

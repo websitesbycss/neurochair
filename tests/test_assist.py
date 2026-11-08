@@ -44,3 +44,19 @@ def test_yamnet_hears_a_sine_tone():
     s = sa.classify(model, 0.5 * np.sin(2 * np.pi * 1000 * t))
     top = [names[i] for i in np.argsort(-s)[:3]]
     assert any("sine" in n.lower() or "beep" in n.lower() or "tone" in n.lower() for n in top), top
+
+
+def test_obstacle_ahead_only_when_close_and_in_path():
+    W, H = 1280, 720
+    close_mid = [("person", 500, 100, 780, 700)]
+    assert va.obstacle_ahead(close_mid, W, H) == "person ahead"
+    assert va.obstacle_ahead([("person", 600, 300, 680, 400)], W, H) is None      # far away (small)
+    assert va.obstacle_ahead([("person", 20, 100, 300, 700)], W, H) is None       # off to the side
+    assert va.obstacle_ahead([("tv", 500, 100, 780, 700)], W, H) is None          # not an obstacle class
+
+
+def test_sound_hold_message():
+    import json
+    m = json.loads(sa.hold_message("DOORBELL"))
+    assert m == {"cmd": "hold", "reason": "doorbell", "seconds": sa.CHAIR_HOLD_S}
+    assert sa.hold_message("BEEPING") is None

@@ -188,6 +188,7 @@ Servo glove was judged too expensive and difficult (about $30 to $40 per servo p
 - `src/app/ssvep_live.py`: live picker using the same stimulus and decoder settings, causal filters; **85 % on the recorded session** (`--offline-check`). Flicker only when armed (SPACE), two agreeing 4 s windows (0.5 s apart) before sending `{"cmd": "go", "dest": ...}`.
 - Decoder -> driver link rehearsed in simulation: `chair_drive.py --sim --lsl` received go / brake / resume and ignored an unknown destination.
 - `src/stream_replay.py` now replays eego `.cnt` recordings as a live LSL stream (prints the recorded markers as they pass).
+- **Supervised autopilot built:** `vision_assist.py --chair` sends a hold while a close obstacle (person, dog, chair, bag...) is in the middle third of the view; `sound_assist.py --chair` sends a 3 s hold on alarms, sirens, doorbell, knocking etc. The driver stops while held, pauses the route and resumes it afterwards; priority brake > keyboard > hold > route; tested (unit tests + simulation with decoder and camera senders at once). Not yet tried on the real chair.
 - Judge-facing `README.md` and `docs/pitch.md` (3-minute plan, video storyboard, likely questions) drafted.
 
 **Risks and checks**

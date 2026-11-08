@@ -12,6 +12,7 @@ Usage:
     python src/app/sound_assist.py --device 2 --threshold 0.25
     python src/app/sound_assist.py --file test.wav # classify a WAV file
     python src/app/sound_assist.py --selftest      # synthetic 1 kHz tone, should come back as "Sine wave"
+    python src/app/sound_assist.py --chair         # alerts also pause the wheelchair for 3 s
 The first run downloads the YAMNet model (needs internet once; then cached).
 """
 import argparse
@@ -114,7 +115,19 @@ def run_file(model, names, table, path, threshold):
         print(f"{start / SR:6.1f}s  {top_text(s, names)}" + (f"   >>> {a[0]}" if a else ""))
 
 
-def mic_worker(model, names, table, device, threshold, out_q, stop):
+CHAIR_HOLD_S = 3.0               # with --chair, an alert pauses the wheelchair this long
+NO_CHAIR_HOLD = {"BEEPING"}       # alerts that shouldn't stop the chair
+
+
+def hold_message(alert_text):
+    """JSON hold command for chair_drive.py, or None for alerts that shouldn't stop the chair."""
+    import json
+    if alert_text in NO_CHAIR_HOLD:
+        return None
+    return json.dumps({"cmd": "hold", "reason": alert_text.lower(), "seconds": CHAIR_HOLD_S})
+
+
+def mic_worker(model, names, table, device, threshold, out_q, stop, outlet=None):
     import sounddevice as sd
     info = sd.query_devices(device, "input")
     sr_in = int(info["default_samplerate"])
@@ -126,6 +139,7 @@ def mic_worker(model, names, table, device, threshold, out_q, stop):
         with lock:
             buf = np.concatenate([buf[frames:], indata[:, 0]])
 
+    last_hold = 0.0
     with sd.InputStream(device=device, channels=1, samplerate=sr_in, dtype="float32", callback=cb):
         out_q.put(("info", f"Listening on: {info['name']} ({sr_in} Hz)"))
         while not stop.is_set():
@@ -135,7 +149,13 @@ def mic_worker(model, names, table, device, threshold, out_q, stop):
             x = to_16k(x, sr_in)[-WIN:]
             level = float(20 * np.log10(np.sqrt(np.mean(x ** 2)) + 1e-9))
             s = classify(model, x)
-            out_q.put(("scores", top_text(s, names), pick_alert(s, table, threshold), level))
+            alert = pick_alert(s, table, threshold)
+            if outlet and alert and time.time() - last_hold > 1.0:
+                msg = hold_message(alert[0])
+                if msg:
+                    outlet.push_sample([msg])
+                    last_hold = time.time()
+            out_q.put(("scores", top_text(s, names), alert, level))
 
 
 def run_console(out_q):
@@ -187,6 +207,7 @@ def main():
     ap.add_argument("--console", action="store_true")
     ap.add_argument("--file")
     ap.add_argument("--selftest", action="store_true")
+    ap.add_argument("--chair", action="store_true", help="alerts pause the wheelchair (chair_drive.py --lsl)")
     a = ap.parse_args()
 
     if a.list:
@@ -204,8 +225,13 @@ def main():
     if a.file:
         return run_file(model, names, table, a.file, a.threshold)
 
+    outlet = None
+    if a.chair:
+        from pylsl import StreamInfo, StreamOutlet
+        outlet = StreamOutlet(StreamInfo("ChairCommands", "Markers", 1, 0, "string", "chair-cmd-sound"))
+        print("Co-pilot: alerts will pause the chair (ChairCommands)", flush=True)
     out_q, stop = queue.Queue(), threading.Event()
-    threading.Thread(target=mic_worker, args=(model, names, table, a.device, a.threshold, out_q, stop),
+    threading.Thread(target=mic_worker, args=(model, names, table, a.device, a.threshold, out_q, stop, outlet),
                      daemon=True).start()
     try:
         run_console(out_q) if a.console else run_window(out_q, stop)

@@ -183,6 +183,13 @@ Servo glove was judged too expensive and difficult (about $30 to $40 per servo p
 - Task 2, brake: danger vs harmless objects (person, ball, cart) with brake_press and outcome markers.
 - Suggested interface (decoder -> driver): `{"cmd": "go", "dest": "Kitchen"}` or `{"cmd": "brake"}`, for example as an LSL marker stream. The driver maps each destination to a fixed tabletop route; brake always wins and stops both balls immediately. Exact format is up to the decoder owner; record it in `docs/decisions.md` and in the CLAUDE.md interface section.
 
+**Integration status (Sat night, branch `cameron/live-ssvep`, built on Sampath's `sampath/wheelchair-bci`)**
+- Sampath's analysis (`WheelchairBCI/analysis/out/REPORT.md`): SSVEP 4-target choice 87.5 % at 4 s with training-free CCA, 90-92.5 % with TRCA / extended CCA after a ~3 min calibration. EEG brake not ready (pre-press AUC 0.67, ~30 % false alarms): **brake stays on the keyboard**. All residual SSVEP errors land on 12 Hz (Bathroom), next to the subject's 11.25 Hz alpha; the report suggests 15/20 Hz targets next time.
+- `src/app/ssvep_live.py`: live picker using the same stimulus and decoder settings, causal filters; **85 % on the recorded session** (`--offline-check`). Flicker only when armed (SPACE), two agreeing 4 s windows (0.5 s apart) before sending `{"cmd": "go", "dest": ...}`.
+- Decoder -> driver link rehearsed in simulation: `chair_drive.py --sim --lsl` received go / brake / resume and ignored an unknown destination.
+- `src/stream_replay.py` now replays eego `.cnt` recordings as a live LSL stream (prints the recorded markers as they pass).
+- Judge-facing `README.md` and `docs/pitch.md` (3-minute plan, video storyboard, likely questions) drafted.
+
 **Risks and checks**
 - Push test before the heavy plate: a light board with about 150 g resting on both balls (plus something rolling at the back), then drive forward. If the balls spin or wobble in place instead of rolling, the chair needs to get lighter.
 - Ring friction against the ball shell (graphite helps; it may scuff the clear shell).

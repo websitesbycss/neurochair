@@ -47,6 +47,7 @@ ROUTES = {
     "Center": [(-1, 0, 0, 0.8)],
 }
 MOVES = {"forward": (1, 0, 0), "back": (-1, 0, 0), "left": (0, 0, 1), "right": (0, 0, -1),
+         "arc_left": (0.8, 0, 0.5), "arc_right": (0.8, 0, -0.5),        # drive forward while curving
          "slide_left": (0, -1, 0), "slide_right": (0, 1, 0), "stop": (0, 0, 0)}
 
 

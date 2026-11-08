@@ -37,8 +37,8 @@ FRAMES_AT_60 = {"Bathroom": 5, "Kitchen": 7, "Bed": 8, "Door": 9}
 ARROWS = ["Up", "Down", "Left", "Right", "Stop"]
 ARROW_FRAMES = {"Up": 4, "Down": 8, "Left": 7, "Right": 9, "Stop": 5}       # 15 / 7.5 / 8.57 / 6.67 / 12 Hz
 ARROW_CMDS = {"Up": {"cmd": "forward", "seconds": 1.5}, "Down": {"cmd": "back", "seconds": 1.0},
-              "Left": {"cmd": "left", "seconds": 0.8}, "Right": {"cmd": "right", "seconds": 0.8},
-              "Stop": {"cmd": "stop"}}
+              "Left": {"cmd": "arc_left", "seconds": 1.2}, "Right": {"cmd": "arc_right", "seconds": 1.2},
+              "Stop": {"cmd": "stop"}}                       # Left/Right curve forward like steering, not a spin
 
 
 def use_arrows():
@@ -188,6 +188,7 @@ class Live:
         self.state, self.t_arm, self.msg, self.scores = "IDLE", 0.0, "", None
         self.decider = Decider()
         self.arrows, self.continuous = a.arrows, a.arrows
+        self.base, self.t_quiet = None, 0.0                    # per-target resting scores (bias correction)
         self.lock = threading.Lock()
         print(f"EEG: {streams[0].name()} ({len(eeg_cols)} ch @ {self.fs} Hz). Sending on LSL 'ChairCommands'.")
         threading.Thread(target=self.reader, daemon=True).start()
@@ -205,22 +206,36 @@ class Live:
                     self.buf.extend(Y.T)
             with self.lock:
                 armed = self.state == "ARMED"
-                t_arm = self.t_arm
+                t_arm, t_quiet = self.t_arm, self.t_quiet
             now = time.time()
-            if not armed or now - t_arm < DELAY_S + WIN_S or now < next_decode or self.freqs is None:
+            if now < next_decode or self.freqs is None or len(self.buf) < int(WIN_S * self.fs):
                 continue
             next_decode = now + STEP_S
             with self.lock:
                 X = np.asarray(self.buf)[-int(WIN_S * self.fs):].T
-            s = cca_scores(X, self.freqs, NH, self.fs)
+            if not armed:
+                # Flicker off: learn each target's resting score (low frequencies score higher on plain EEG,
+                # which biased decisions toward the slowest target). Only windows fully after the flicker stopped.
+                if now - t_quiet >= WIN_S + DELAY_S:
+                    s = cca_scores(X, self.freqs, NH, self.fs)
+                    self.base = s if self.base is None else 0.8 * self.base + 0.2 * s
+                continue
+            if now - t_arm < DELAY_S + WIN_S:
+                continue
+            raw = cca_scores(X, self.freqs, NH, self.fs)
+            s = raw - (self.base if self.base is not None else 0.0)
+            if self.base is not None:
+                self.base = 0.97 * self.base + 0.03 * raw          # slow drift tracking while steering
             pick = TARGETS[int(np.argmax(s))]
+            print("scores-baseline: " + "  ".join(f"{n} {v:+.3f}" for n, v in zip(TARGETS, s)) + f"  -> {pick}",
+                  flush=True)
             confirmed = self.decider.update(pick)
             with self.lock:
                 self.scores = s
                 if confirmed and self.state == "ARMED":
                     self.send(ARROW_CMDS[confirmed] if self.arrows else {"cmd": "go", "dest": confirmed})
                     print(f"decoded: {confirmed}", flush=True)
-                    self.state, self.t_arm = "DONE", now
+                    self.state, self.t_arm, self.t_quiet = "DONE", now, now
                     self.msg = (confirmed.upper() if self.arrows else f"Going to {confirmed}")
 
     def run(self, a):
@@ -259,7 +274,7 @@ class Live:
                             self.decider.reset()
                             self.state, self.t_arm, self.msg = "ARMED", time.time(), ""
                         elif e.key == pygame.K_SPACE:                # pause steering
-                            self.state, self.msg = "IDLE", "paused"
+                            self.state, self.msg, self.t_quiet = "IDLE", "paused", time.time()
                             if self.arrows:
                                 self.send({"cmd": "stop"})
                         elif e.key == pygame.K_b:
@@ -271,7 +286,7 @@ class Live:
             with self.lock:
                 state, t_arm, msg, sc = self.state, self.t_arm, self.msg, self.scores
                 if state == "ARMED" and time.time() - t_arm > ARM_MAX_S:
-                    self.state, self.msg = "IDLE", "No destination chosen"
+                    self.state, self.msg, self.t_quiet = "IDLE", "No destination chosen", time.time()
                 if state == "DONE" and time.time() - t_arm > (2.0 if self.continuous else 3.0):
                     if self.continuous:                      # keep steering: re-arm after each move
                         self.decider.reset()

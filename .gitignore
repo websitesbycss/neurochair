@@ -3,3 +3,4 @@ __pycache__/
 data/
 *.pyc
 lsl_api.cfg
+cad/zips/

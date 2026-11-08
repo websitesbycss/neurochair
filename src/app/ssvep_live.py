@@ -30,6 +30,21 @@ from scipy import linalg, signal
 
 TARGETS = ["Bathroom", "Kitchen", "Bed", "Door"]            # corner order: TL, TR, BL, BR
 FRAMES_AT_60 = {"Bathroom": 5, "Kitchen": 7, "Bed": 8, "Door": 9}
+
+# --arrows: steer the chair directly. STOP gets 12 Hz on purpose: in the recorded session every decoding
+# error landed on 12 Hz (next to the subject's alpha), so a misread stops the chair instead of moving it.
+# UP uses 15 Hz (alpha-free, as the analysis report recommends).
+ARROWS = ["Up", "Down", "Left", "Right", "Stop"]
+ARROW_FRAMES = {"Up": 4, "Down": 8, "Left": 7, "Right": 9, "Stop": 5}       # 15 / 7.5 / 8.57 / 6.67 / 12 Hz
+ARROW_CMDS = {"Up": {"cmd": "forward", "seconds": 1.5}, "Down": {"cmd": "back", "seconds": 1.0},
+              "Left": {"cmd": "left", "seconds": 0.8}, "Right": {"cmd": "right", "seconds": 0.8},
+              "Stop": {"cmd": "stop"}}
+
+
+def use_arrows():
+    TARGETS[:] = ARROWS
+    FRAMES_AT_60.clear()
+    FRAMES_AT_60.update(ARROW_FRAMES)
 OCC = ["O1", "Oz", "O2", "P3", "Pz", "P4", "P7", "P8"]
 MASTOIDS = ["M1", "M2"]
 STANDARD = ["Fp1", "Fp2", "F9", "F7", "F3", "Fz", "F4", "F8", "F10", "M1", "T7", "C3", "C4", "T8", "M2", "Cz",
@@ -172,6 +187,7 @@ class Live:
         self.freqs = None
         self.state, self.t_arm, self.msg, self.scores = "IDLE", 0.0, "", None
         self.decider = Decider()
+        self.arrows, self.continuous = a.arrows, a.arrows
         self.lock = threading.Lock()
         print(f"EEG: {streams[0].name()} ({len(eeg_cols)} ch @ {self.fs} Hz). Sending on LSL 'ChairCommands'.")
         threading.Thread(target=self.reader, daemon=True).start()
@@ -202,8 +218,10 @@ class Live:
             with self.lock:
                 self.scores = s
                 if confirmed and self.state == "ARMED":
-                    self.send({"cmd": "go", "dest": confirmed})
-                    self.state, self.msg, self.t_arm = "DONE", f"Going to {confirmed}", now
+                    self.send(ARROW_CMDS[confirmed] if self.arrows else {"cmd": "go", "dest": confirmed})
+                    print(f"decoded: {confirmed}", flush=True)
+                    self.state, self.t_arm = "DONE", now
+                    self.msg = (confirmed.upper() if self.arrows else f"Going to {confirmed}")
 
     def run(self, a):
         import pygame
@@ -223,6 +241,11 @@ class Live:
         s, m = 170, 40
         rects = [pygame.Rect(m, m, s, s), pygame.Rect(W - m - s, m, s, s),
                  pygame.Rect(m, H - m - s - 30, s, s), pygame.Rect(W - m - s, H - m - s - 30, s, s)]
+        if self.arrows:                                      # plus-shaped layout: Up, Down, Left, Right, Stop
+            s = 170
+            rects = [pygame.Rect(W // 2 - s // 2, 20, s, s), pygame.Rect(W // 2 - s // 2, H - s - 50, s, s),
+                     pygame.Rect(80, H // 2 - s // 2, s, s), pygame.Rect(W - 80 - s, H // 2 - s // 2, s, s),
+                     pygame.Rect(W // 2 - s // 2, H // 2 - s // 2, s, s)]
         print("Flicker: " + ", ".join(f"{t} {self.freqs[t]:.2f} Hz" for t in TARGETS) + f" (refresh {refresh:.0f} Hz)")
         frame = 0
         while True:
@@ -235,6 +258,10 @@ class Live:
                         if e.key == pygame.K_SPACE and self.state != "ARMED":
                             self.decider.reset()
                             self.state, self.t_arm, self.msg = "ARMED", time.time(), ""
+                        elif e.key == pygame.K_SPACE:                # pause steering
+                            self.state, self.msg = "IDLE", "paused"
+                            if self.arrows:
+                                self.send({"cmd": "stop"})
                         elif e.key == pygame.K_b:
                             self.send({"cmd": "brake"})
                             self.state, self.msg = "IDLE", "BRAKE sent"
@@ -245,8 +272,12 @@ class Live:
                 state, t_arm, msg, sc = self.state, self.t_arm, self.msg, self.scores
                 if state == "ARMED" and time.time() - t_arm > ARM_MAX_S:
                     self.state, self.msg = "IDLE", "No destination chosen"
-                if state == "DONE" and time.time() - t_arm > 3.0:
-                    self.state = "IDLE"
+                if state == "DONE" and time.time() - t_arm > (2.0 if self.continuous else 3.0):
+                    if self.continuous:                      # keep steering: re-arm after each move
+                        self.decider.reset()
+                        self.state, self.t_arm = "ARMED", time.time()
+                    else:
+                        self.state = "IDLE"
             screen.fill((18, 18, 24))
             for i, (r, name) in enumerate(zip(rects, TARGETS)):
                 if state == "ARMED":
@@ -258,14 +289,21 @@ class Live:
                 screen.blit(lbl, lbl.get_rect(center=(r.centerx, r.bottom + 18)))
             title = {"IDLE": "Press SPACE, then look at a destination", "ARMED": "Look at where you want to go",
                      "DONE": msg}[state]
+            if self.arrows:
+                title = {"IDLE": "Press SPACE to start steering", "ARMED": "Look at an arrow (or STOP)",
+                         "DONE": msg}[state]
             t = big.render(title, True, (255, 220, 0) if state == "DONE" else (235, 235, 235))
-            screen.blit(t, t.get_rect(center=(W // 2, H // 2 - 20)))
             info = msg if state == "IDLE" else ""
             if sc is not None and state != "IDLE":
                 info = "  ".join(f"{n} {v:.2f}" for n, v in zip(TARGETS, sc))
-            txt = small.render(info + "    (B brake, R resume, ESC quit)", True, (160, 160, 170))
-            screen.blit(txt, txt.get_rect(center=(W // 2, H // 2 + 40)))
-            pygame.draw.circle(screen, (235, 235, 235), (W // 2, H // 2 + 90), 6)
+            txt = small.render(info + "    (SPACE start/pause, B brake, R resume, ESC quit)", True, (160, 160, 170))
+            if self.arrows:
+                screen.blit(t, t.get_rect(center=(W // 2, H // 2 - 130)))
+                screen.blit(txt, txt.get_rect(center=(W // 2, H - 18)))
+            else:
+                screen.blit(t, t.get_rect(center=(W // 2, H // 2 - 20)))
+                screen.blit(txt, txt.get_rect(center=(W // 2, H // 2 + 40)))
+                pygame.draw.circle(screen, (235, 235, 235), (W // 2, H // 2 + 90), 6)
             pygame.display.flip()
             clock.tick(refresh * 1.5)
             frame += 1
@@ -289,7 +327,10 @@ def main():
     ap.add_argument("--refresh", type=float, default=0)
     ap.add_argument("--fullscreen", action="store_true")
     ap.add_argument("--eeg-name", default="")
+    ap.add_argument("--arrows", action="store_true", help="steer with Up/Down/Left/Right/Stop targets")
     a = ap.parse_args()
+    if a.arrows:
+        use_arrows()
     if a.offline_check:
         offline_check(a.offline_check, a.bads.split(","))
         return

@@ -6,3 +6,4 @@ lsl_api.cfg
 cad/zips/
 *.pt
 video/
+.venv-gopro/

@@ -95,6 +95,32 @@ def start_gopro_usb(ip, res):
     threading.Thread(target=keep_alive, daemon=True).start()
 
 
+def start_gopro_wifi(ip="10.5.5.9"):
+    """Laptop joined the GoPro's own Wi-Fi: start the preview stream and keep the camera awake.
+    Video arrives on udp://@0.0.0.0:8554 (Open GoPro preview stream, no audio)."""
+    import os
+    import threading
+    import requests
+    base = f"http://{ip}:8080/gopro"
+    try:
+        requests.get(f"{base}/camera/stream/stop", timeout=5)
+    except Exception:
+        pass
+    time.sleep(0.5)
+    r = requests.get(f"{base}/camera/stream/start", timeout=5)
+    print(f"GoPro Wi-Fi preview start -> HTTP {r.status_code}", flush=True)
+    os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "fflags;nobuffer|flags;low_delay")
+
+    def keep_alive():
+        while True:
+            try:
+                requests.get(f"{base}/camera/keep_alive", timeout=3)
+            except Exception:
+                pass
+            time.sleep(2.5)
+    threading.Thread(target=keep_alive, daemon=True).start()
+
+
 def list_cameras():
     import cv2
     for i in range(6):
@@ -135,8 +161,7 @@ def main():
         return
 
     if a.gopro:
-        import requests
-        requests.get("http://10.5.5.9:8080/gopro/camera/stream/start", timeout=5)
+        start_gopro_wifi()
     if a.gopro_usb:
         start_gopro_usb(a.gopro_usb, a.res)
 

@@ -4,3 +4,4 @@ data/
 *.pyc
 lsl_api.cfg
 cad/zips/
+*.pt

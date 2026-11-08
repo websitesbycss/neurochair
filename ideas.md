@@ -166,3 +166,10 @@ Two Sphero BOLTs are the front drive wheels of a 3D-printed tabletop wheelchair 
 - Balls sit in low-friction cone rings (a grippy cup would shove the chair off the ball, since the top of a rolling ball moves at twice its speed).
 - Main chair: about 5 h 24 min printer time, 189 g; mini 3 h 46 min, 120 g (PrusaSlicer, CORE One). Two printers in parallel finish both in about 5 h.
 - Risks: unknown BOLT payload (test with a weighted board first), ring friction, steering both balls together in software.
+
+### 19. Camera and sound awareness on the wheelchair (stretch goal, after driving works)
+GoPro HERO13 (about 154 g) on the main chair for object detection ("person ahead", "door left") spoken aloud for blind users; sound classification (doorbell, alarm, siren, someone calling) shown as a big visual alert for deaf users.
+- Mount it on the rear of the seat pan with the GoPro adhesive mount, facing forward: most of its weight then goes to the casters, not the Bolts (about 20 g extra per ball). Never at the front.
+- Video: Open GoPro preview stream, about 200-300 ms latency per GoPro's FAQ. Conflict: the GoPro's own Wi-Fi takes over the laptop's Wi-Fi, which the EEG stream also needs. Options: second USB Wi-Fi adapter, or GoPro joining the hotspot (camera-on-home-network mode; unconfirmed for HERO13). Sketch: `src/app/vision_assist.py`.
+- Audio: GoPro preview audio unconfirmed; use the laptop or phone microphone for sound classification instead.
+- Priority: only after the chair drives and the print is assembled.

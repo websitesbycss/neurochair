@@ -1,0 +1,9 @@
+# Optional extras for src/app/sound_assist.py and src/app/vision_assist.py (large downloads; not used by CI)
+tensorflow
+tensorflow-hub
+setuptools<81   # tensorflow-hub still imports pkg_resources
+sounddevice
+ultralytics
+opencv-python
+pyttsx3
+requests

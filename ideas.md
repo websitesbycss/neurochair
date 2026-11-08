@@ -191,7 +191,7 @@ Servo glove was judged too expensive and difficult (about $30 to $40 per servo p
 - **Supervised autopilot built:** `vision_assist.py --chair` sends a hold while a close obstacle (person, dog, chair, bag...) is in the middle third of the view; `sound_assist.py --chair` sends a 3 s hold on alarms, sirens, doorbell, knocking etc. The driver stops while held, pauses the route and resumes it afterwards; priority brake > keyboard > hold > route; tested (unit tests + simulation with decoder and camera senders at once). Not yet tried on the real chair.
 - Judge-facing `README.md` and `docs/pitch.md` (3-minute plan, video storyboard, likely questions) drafted.
 
-**Full-size concept (renders for the slides):** `cad/power_chair.py` + `cad/renders/`. A standard folding manual wheelchair with a retrofit kit (hub-motor rear wheels, battery under the seat, controller on the backrest, front camera, mic, E-stop, anti-tip bars). Framing: "upgrade the chair you already own". The tabletop prototype uses front Sphero drive only because of the miniature scale.
+**Full-size concept (renders for the slides):** `cad/power_chair.py` + `cad/renders/`. A standard folding manual wheelchair with a retrofit kit (hub-motor rear wheels, battery under the seat, controller on the backrest, front camera, mic, SSVEP direction screen with arrows + STOP, anti-tip bars). Framing: "upgrade the chair you already own". The tabletop prototype uses front Sphero drive only because of the miniature scale.
 
 **Risks and checks**
 - Push test before the heavy plate: a light board with about 150 g resting on both balls (plus something rolling at the back), then drive forward. If the balls spin or wobble in place instead of rolling, the chair needs to get lighter.

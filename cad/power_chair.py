@@ -5,8 +5,8 @@ The chair is an ordinary folding wheelchair (24" rear wheels with push rims, 8" 
 and back, push handles, armrests, swing-away footrests), because the point is to upgrade the chair people
 already have. The kit adds: hub-motor rear wheels on quick-release axles, a battery pack under the seat,
 a controller/compute box (EEG decoder, co-pilot, motor control) on the back of the backrest, a forward
-camera on the front frame, a microphone on a push handle, an emergency-stop button on the armrest, and
-anti-tip bars.
+camera on the front frame, a microphone on a push handle, an SSVEP direction screen on a swing-away arm
+(up/down/left/right arrows, STOP in the middle), and anti-tip bars.
 
 Parts are modelled in mm under an empty scaled 1:1000, so lights and cameras work in metres. Run inside Blender:
     exec(open(r"C:\\Coding Projects\\neurotech\\cad\\power_chair.py").read())
@@ -40,6 +40,10 @@ PALETTE = {
     "red": dict(color=(0.75, 0.02, 0.02), metallic=0.0, rough=0.35),
     "yellow": dict(color=(1.0, 0.75, 0.0), metallic=0.0, rough=0.4),
     "led_green": dict(color=(0.1, 1.0, 0.35), emit=6.0),
+    "screen_white": dict(color=(1.0, 1.0, 1.0), emit=4.0),
+    "screen_red": dict(color=(1.0, 0.08, 0.05), emit=4.0),
+    "screen_pad": dict(color=(0.12, 0.13, 0.16), metallic=0.0, rough=0.6),
+    "screen_text": dict(color=(1.0, 1.0, 1.0), emit=3.0),
     "led_orange": dict(color=(1.0, 0.45, 0.05), emit=6.0),
     "floor": dict(color=(0.82, 0.83, 0.85), metallic=0.0, rough=0.6),
 }
@@ -207,6 +211,51 @@ def body():
 
 
 # ---------------------------------------------------------------- parts: the retrofit kit
+def flat(name, mat, pts2d, centre, rot, depth=-1.3):
+    """Flat emissive shape on the screen plane: pts2d are (u right, v up) in mm; the screen faces -y locally."""
+    bm = bmesh.new()
+    vs = [bm.verts.new(Vector(centre) + rot @ Vector((u, depth, v))) for u, v in pts2d]
+    bm.faces.new(vs)
+    return new_obj(name, bm, mat)
+
+
+def label(name, text, size, centre, rot, offset, mat="screen_text"):
+    cu = bpy.data.curves.new(name, "FONT")
+    cu.body, cu.size, cu.align_x, cu.align_y = text, size, "CENTER", "CENTER"
+    ob = bpy.data.objects.new(name, cu)
+    bpy.data.collections[COLL].objects.link(ob)
+    ob.parent = bpy.data.objects["power_chair_root"]
+    ob.data.materials.append(material(mat))
+    ob.matrix_basis = Matrix.Translation(Vector(centre) + rot @ Vector(offset)) @ rot @ Matrix.Rotation(math.pi / 2, 4, "X")
+    return ob
+
+
+def ssvep_screen(xr):
+    """SSVEP direction screen: up/down/left/right arrows and STOP in the middle, each flickering at its own rate."""
+    tube("kit_screen_post", "kit", (xr, 40, 700), (xr, 40, 728), r=11)              # swing-away arm
+    tube("kit_screen_arm", "kit", (xr, 40, 728), (60, 342, 728), r=11)               # passes under the screen
+    centre = Vector((0, 320, 840))
+    rot = Matrix.Rotation(math.radians(-22), 4, "X")                              # tilted back toward the user
+    box("kit_screen_body", "steel", centre, (270, 16, 190), rot=rot, bevel=8)
+    box("kit_screen_vesa", "kit", centre + rot @ Vector((60, 12, -20)), (70, 10, 70), rot=rot, bevel=4)
+    tube("kit_screen_clamp", "kit", (60, 342, 728), (60, 344, 815), r=9)             # up the back to the VESA plate
+    face = centre + rot @ Vector((0, -8.5, 0))
+    box("kit_screen_glass", "glass", face, (254, 1, 174), rot=rot, bevel=0)
+    s = 34                                                                       # arrow size (mm)
+    arrow = [(-0.17 * s, -0.5 * s), (0.17 * s, -0.5 * s), (0.17 * s, 0.05 * s), (0.42 * s, 0.05 * s),
+             (0, 0.55 * s), (-0.42 * s, 0.05 * s), (-0.17 * s, 0.05 * s)]
+    targets = {"up": ((0, 58), 0), "down": ((0, -58), 180), "left": ((-88, 0), 90), "right": ((88, 0), -90)}
+    for name, ((cu, cv), ang) in targets.items():
+        a = math.radians(ang)
+        pts = [(cu + x * math.cos(a) - y * math.sin(a), cv + x * math.sin(a) + y * math.cos(a)) for x, y in arrow]
+        sq = [(cu - 27, cv - 27), (cu + 27, cv - 27), (cu + 27, cv + 27), (cu - 27, cv + 27)]
+        flat(f"ssvep_pad_{name}", "screen_pad", sq, face, rot, depth=-1.0)
+        flat(f"ssvep_arrow_{name}", "screen_white", pts, face, rot, depth=-1.6)
+    flat("ssvep_pad_stop", "screen_pad", [(-27, -27), (27, -27), (27, 27), (-27, 27)], face, rot, depth=-1.0)
+    label("ssvep_stop_text", "STOP", 13, face, rot, (0, -2.2, 0), mat="screen_white")
+    label("ssvep_hint", "look to move", 7, face, rot, (90, -2.2, -72))
+
+
 def kit():
     # battery pack hung from the seat rails, under the sling
     box("kit_battery", "kit", (0, -40, 352), (330, 170, 78), bevel=12)
@@ -225,13 +274,8 @@ def kit():
         tube(f"kit_cable_b_{side}", "grip", (side * (RAIL_X - 15), -215, 420), (side * (RAIL_X + 20), WHEEL_Y + 40, WHEEL_Z + 60), r=5)
     tube("kit_cable_battery_a", "grip", (60, -125, 352), (60, -268, 420), r=6)      # behind the back sling
     tube("kit_cable_battery_b", "grip", (60, -268, 420), (60, -268, 675), r=6)
-    # emergency stop on the right armrest
     xr = RAIL_X
-    box("kit_estop_pod", "kit", (xr, 55, 742), (62, 74, 26), bevel=8)
-    cyl("kit_estop_base", "yellow", (xr, 55, 760), 22, 8, bevel=1)
-    cyl("kit_estop_button", "red", (xr, 55, 772), 17, 18, r2=20, bevel=4)
-    for k, m in enumerate(("led_green", "led_orange")):
-        cyl(f"kit_pod_led_{k}", m, (xr - 14 + 28 * k, 24, 756), 4, 4, seg=16)
+    ssvep_screen(xr)
     # forward camera (co-pilot eye) clamped to the right front upright
     cam = Vector((xr + 4, CASTER_Y + 45, 430))
     box("kit_camera_clamp", "kit", (xr, CASTER_Y + 8, 430), (34, 40, 34), bevel=5)
@@ -270,7 +314,7 @@ def reset():
 def stage():
     """Floor, world, lights and cameras for product shots."""
     sc = bpy.context.scene
-    for n in ("floor", "key", "fill", "rim", "cam_hero", "cam_side", "cam_rear", "cam_motor", "cam_front"):
+    for n in ("floor", "key", "fill", "rim", "cam_hero", "cam_side", "cam_rear", "cam_motor", "cam_front", "cam_screen"):
         o = bpy.data.objects.get(n)
         if o:
             bpy.data.objects.remove(o)
@@ -323,9 +367,10 @@ def stage():
     cam("cam_rear", (1.75, -2.2, 1.35), (0, -0.1, 0.52), lens=42)
     cam("cam_motor", (1.25, 0.45, 0.8), (0.27, -0.17, 0.38), lens=45)
     cam("cam_front", (0.85, 1.25, 0.82), (0.2, 0.25, 0.48), lens=40)
+    cam("cam_screen", (0.32, -0.32, 1.32), (0.0, 0.32, 0.83), lens=35)   # over the user's shoulder
 
 
-def render(names=("cam_hero", "cam_side", "cam_rear", "cam_motor", "cam_front"), res=(1920, 1080), samples=64):
+def render(names=("cam_hero", "cam_side", "cam_rear", "cam_motor", "cam_front", "cam_screen"), res=(1920, 1080), samples=64):
     sc = bpy.context.scene
     os.makedirs(OUT, exist_ok=True)
     sc.render.resolution_x, sc.render.resolution_y = res

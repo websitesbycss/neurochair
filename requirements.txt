@@ -8,3 +8,4 @@ pytest
 antio
 spherov2
 bleak
+pygame

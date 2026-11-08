@@ -69,6 +69,29 @@ def ball_commands(v, u, w, yaw_deg, max_speed):
     return out
 
 
+def apply_command(st, text):
+    """Apply one decoder/autopilot JSON command to the drive state. Returns a short description, or None."""
+    try:
+        c = json.loads(text)
+    except (TypeError, ValueError):
+        return None
+    cmd = c.get("cmd")
+    if cmd == "brake":
+        st.update(brake=True, auto=[])
+    elif cmd == "resume":
+        st["brake"] = False
+    elif cmd == "go" and c.get("dest") in ROUTES:
+        st["auto"] = [list(step) for step in ROUTES[c["dest"]]]
+        st["auto_until"] = 0.0
+    elif cmd in MOVES:
+        st["auto"] = [[*MOVES[cmd], float(c.get("seconds", 1.0))]]
+        st["auto_until"] = 0.0
+    else:
+        return None
+    st["source"] = f"decoder: {text}"
+    return st["source"]
+
+
 def yaw_rate_deg(w, max_speed):
     """Estimated chair turn rate (deg/s, clockwise-positive like Sphero headings) for turn command w."""
     tangential = w * max_speed * MM_S_PER_UNIT
@@ -154,12 +177,9 @@ def main():
     balls.light((0, 0, 255), (255, 0, 0))
     balls.aim_light(True)
 
-    inlet = None
+    lsl = {"inlet": None, "next_try": 0.0}
     if a.lsl:
-        from pylsl import StreamInlet, resolve_byprop
-        found = resolve_byprop("name", "ChairCommands", timeout=2)
-        inlet = StreamInlet(found[0]) if found else None
-        print("LSL: " + ("connected to ChairCommands" if inlet else "ChairCommands stream not found (keys still work)"))
+        print("LSL: listening for the ChairCommands stream (keys work meanwhile)", flush=True)
 
     st = dict(mode="AIM", sel=0, aim=[0, 0], keys=set(), brake=False, yaw=0.0, max=a.max_speed,
               auto=[], auto_until=0.0, source="-")
@@ -203,26 +223,22 @@ def main():
         st["keys"].discard(e.keysym)
 
     def read_lsl():
-        if not inlet:
+        if not a.lsl:
             return
-        msgs, _ = inlet.pull_chunk(timeout=0.0)
+        if lsl["inlet"] is None:                       # keep looking, so start order doesn't matter
+            if time.time() < lsl["next_try"]:
+                return
+            from pylsl import StreamInlet, resolve_byprop
+            found = resolve_byprop("name", "ChairCommands", timeout=0.1)
+            lsl["next_try"] = time.time() + 2.0
+            if not found:
+                return
+            lsl["inlet"] = StreamInlet(found[0])
+            print("LSL: connected to ChairCommands", flush=True)
+        msgs, _ = lsl["inlet"].pull_chunk(timeout=0.0)
         for (m,) in msgs:
-            try:
-                c = json.loads(m)
-            except Exception:
-                continue
-            cmd = c.get("cmd")
-            if cmd == "brake":
-                st.update(brake=True, auto=[])
-            elif cmd == "resume":
-                st["brake"] = False
-            elif cmd == "go" and c.get("dest") in ROUTES:
-                st["auto"] = [list(step) for step in ROUTES[c["dest"]]]
-                st["auto_until"] = 0.0
-            elif cmd in MOVES:
-                st["auto"] = [[*MOVES[cmd], float(c.get("seconds", 1.0))]]
-                st["auto_until"] = 0.0
-            st["source"] = f"decoder: {m}"
+            got = apply_command(st, m)
+            print(f"received {m}" + ("" if got else "  (ignored)"), flush=True)
 
     def tick():
         read_lsl()

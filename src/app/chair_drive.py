@@ -11,10 +11,12 @@ Usage:
 
 Startup = AIM mode (do this with the chair on the table, balls in their rings):
     each ball's small blue BACK light must point to the BACK of the chair.
-    Left/Right arrows rotate the selected ball, Tab switches ball, Enter = done (sets heading 0 = chair forward).
+    Left/Right arrows rotate the selected ball 10 deg (Shift = 2 deg), Tab switches ball,
+    Enter = done (sets heading 0 = chair forward). Press T while driving to come back here.
 DRIVE mode keys:
     Up/Down forward/back   Left/Right turn in place   A/D slide sideways
-    Space BRAKE (press again to release)   +/- speed cap   R re-aim (chair facing its original forward)
+    Space BRAKE (press again to release)   +/- speed cap   R reset forward (chair facing straight)
+    T redo the back-light alignment (stops both balls)
     Esc quit (always stops both balls first)
 
 Decoder commands (JSON strings on an LSL marker stream named "ChairCommands"):
@@ -198,7 +200,8 @@ def main():
             return quit_()
         if st["mode"] == "AIM":
             if k in ("Left", "Right"):
-                st["aim"][st["sel"]] = (st["aim"][st["sel"]] + (-10 if k == "Left" else 10)) % 360
+                step = 2 if e.state & 0x0001 else 10        # Shift = fine 2-degree steps
+                st["aim"][st["sel"]] = (st["aim"][st["sel"]] + (-step if k == "Left" else step)) % 360
                 balls.rotate(st["sel"], st["aim"][st["sel"]])
             elif k == "Tab":
                 st["sel"] = 1 - st["sel"]
@@ -216,6 +219,10 @@ def main():
             st["max"] = max(20, st["max"] - 10)
         elif k in ("r", "R"):
             st["yaw"] = 0.0
+        elif k in ("t", "T"):                               # back to AIM without restarting
+            balls.stop()
+            balls.aim_light(True)
+            st.update(mode="AIM", sel=0, aim=[0, 0], keys=set(), auto=[])
         else:
             st["keys"].add(k)
 
@@ -245,7 +252,7 @@ def main():
         if st["mode"] == "AIM":
             big.config(text="AIM: back lights to the BACK", bg="#1d4ed8")
             info.config(text=f"Selected ball: {'LEFT (blue)' if st['sel'] == 0 else 'RIGHT (red)'}\n"
-                             f"Left/Right = rotate it   Tab = other ball   Enter = done\n"
+                             f"Left/Right = rotate it 10 deg (Shift: 2 deg)   Tab = other ball   Enter = done\n"
                              f"headings now: left {st['aim'][0]}  right {st['aim'][1]}")
             root.after(int(TICK_S * 1000), tick)
             return
@@ -283,7 +290,8 @@ def main():
                          f"left ball  heading {hl:3d}  speed {sl:4d}\n"
                          f"right ball heading {hr:3d}  speed {sr:4d}\n"
                          f"last command from: {st['source']}\n\n"
-                         f"Up/Down move  Left/Right turn  A/D slide  Space brake  +/- speed  R re-aim  Esc quit")
+                         f"Up/Down move  Left/Right turn  A/D slide  Space brake  +/- speed\n"
+                         f"R reset forward  T re-align back lights  Esc quit")
         root.after(int(TICK_S * 1000), tick)
 
     def quit_():

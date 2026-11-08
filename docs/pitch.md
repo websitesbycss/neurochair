@@ -11,6 +11,7 @@ Working title: **"Supervised autopilot for brain-controlled wheelchairs"**. One-
 | 1:10-1:45 | 4. How it works | EEG: 4 flickering targets, CCA decoder on 8 back-of-head channels: **87.5 % with no calibration** (chance 25 %), 90-92.5 % with a 3-minute calibration, 85 % running live. Chair: 3D-printed, two Sphero balls as drive wheels. Co-pilot: YOLO object detection ("person ahead"), YAMNet sound alerts for deaf users. Brake always wins. |
 | 1:45-2:15 | 5. What we learned (honest science) | The brain brake isn't ready: before the hand moves, EEG only weakly separates danger from harmless (AUC 0.67), so the brake stays on a key. The 12 Hz target sits next to this subject's alpha rhythm, which is where every decoder error landed; next version moves it to 15/20 Hz. |
 | 2:15-2:45 | 6. Why it scales | Works with any LSL headset; training-free decoder; same control software would drive a real power chair; co-pilot also serves blind and deaf users. Cheap parts: a printed frame, two toy robots, a GoPro, a laptop. |
+| (in slide 6) | Full-size render | Show `cad/renders/power_chair_hero.png` / `_rear.png`: "the real version is a retrofit kit for the standard wheelchair people already own: hub-motor wheels, a battery, a controller, a camera, an E-stop." |
 | 2:45-3:00 | 7. Close + team | "You choose. It keeps you safe." Team names, repo link. |
 
 ## Video storyboard (20-30 s)

@@ -142,6 +142,7 @@ def main():
                     help="read the GoPro directly over USB (quit the GoPro Webcam app first); optional camera IP")
     ap.add_argument("--res", type=int, default=7, help="GoPro webcam resolution: 4=480p, 7=720p, 12=1080p")
     ap.add_argument("--chair", action="store_true", help="send safety holds to chair_drive.py --lsl")
+    ap.add_argument("--record", help="save the annotated view to this .mp4 (stop with q)")
     a = ap.parse_args()
 
     if a.list:
@@ -175,7 +176,7 @@ def main():
     cam = LatestFrame(open_cap)
     voice = None if a.no_voice else Speaker()
     last_said, t_prev = {}, time.time()
-    outlet, last_hold = None, 0.0
+    outlet, last_hold, writer = None, 0.0, None
     if a.chair:
         from pylsl import StreamInfo, StreamOutlet
         outlet = StreamOutlet(StreamInfo("ChairCommands", "Markers", 1, 0, "string", "chair-cmd-vision"))
@@ -213,10 +214,21 @@ def main():
             t_prev = now
             if blocked:
                 cv2.putText(view, f"CHAIR STOPPED: {blocked}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 140, 255), 3)
+            if a.record:
+                if writer is None:
+                    import os
+                    os.makedirs(os.path.dirname(os.path.abspath(a.record)), exist_ok=True)
+                    writer = cv2.VideoWriter(a.record, cv2.VideoWriter_fourcc(*"mp4v"), 12,
+                                             (view.shape[1], view.shape[0]))
+                    print(f"recording to {a.record}", flush=True)
+                writer.write(view)
             cv2.imshow("vision assist (q to quit)", view)
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
     finally:
+        if writer is not None:
+            writer.release()
+            print(f"saved {a.record}", flush=True)
         cam.stop()
         cv2.destroyAllWindows()
 

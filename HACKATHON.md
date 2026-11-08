@@ -8,7 +8,7 @@
 ## The challenge (ANT Neuro track)
 Build a **scalable, everyday-life application that uses movement, tracked through EEG, as its core input**, and make it respond in real time.
 - "Scalable" is a judging theme: show how it extends to more headsets, more users, different movements, and wider deployment.
-- Final deliverable: a **3-minute in-person presentation with a live demo** covering both the technical side and the impact.
+- Final deliverable: a **3-minute in-person presentation** covering both the technical side and the impact. **Update (organizer announcement, Sat night): no live demo is expected.** Show recorded video clips in the slides instead.
 
 ## Hardware
 - 4× ANT Neuro **eego 24-channel** systems (eego amplifier EE-5xx/EE-511 + waveguard net cap)
@@ -35,6 +35,12 @@ Build a **scalable, everyday-life application that uses movement, tracked throug
 | Sat | 7:00–7:30 PM |
 | Sun | 9:30–10:00 AM |
 | Sun | 10:30–11:00 AM |
+
+## Sunday plan (after the organizer update)
+- **Final testing:** 1-hour slot per team, between 9 AM and 12 PM (exact slots to be announced). Use it to **film the full chain: headset → decoder → chair moving**. Arrive with the chair assembled, both Spheros charged, the GoPro charged, and a phone ready to record, so the hour goes to filming, not setup.
+- **Conflict to resolve:** testing runs until 12 but the submission (with the .pptx) is due 11:45. Ask the organizers whether the deadline moves, or ask for an early slot.
+- **Saturday night, so there's a video even if EEG isn't ready:** assemble the print, get the chair driving (keyboard control is fine), and film the GoPro object detection ("person ahead") and the sound alerts (doorbell, alarm). Several takes; keep the best.
+- Video clips to have for the slides: chair driving on the Spheros, vision alert, sound alert, EEG decoding / SSVEP choice, and the full EEG-controlled run if the testing slot works.
 
 ## Schedule
 **Sat Nov 7**: 9:00 check-in (lobby) · 9:45 kickoff (main room) · 10:30 track briefing (2201) · 11:00 hacking starts · 12:15 lunch (main room) · 1:00–8:30 rotations · 10:00 PM doors close

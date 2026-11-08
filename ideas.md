@@ -218,6 +218,14 @@ Object detection spoken aloud for blind and low-vision users, and big visual sou
 - Streaming drains the GoPro battery: charge it fully before the demo.
 - Priority: only after the chair drives and the print is assembled.
 
+### 20. Extra wheelchair features (software only; GoPro + UNO Q; none built yet)
+- **"Look at it to go there":** objects the GoPro sees (door, chair, person) become the SSVEP targets: up to 4 detected objects get a flickering label; look at one and the chair turns until it's centred and drives toward it, with the close-obstacle hold stopping it in front. Destinations come from the real room, not a fixed menu. Hardest; most distinctive.
+- **Smoke-alarm evacuation offer:** sound co-pilot hears a smoke/fire alarm -> screen flashes "Smoke alarm: go to the Door?" -> one glance (or clench) confirms -> chair drives to Door. The AI suggests; the user decides. Story: deaf and mobility-impaired people in a fire.
+- **Follow-me mode:** user turns it on; the chair follows a caregiver walking ahead (keep the person centred and at a set distance using YOLO), hold if too close. Use case: being guided without being pushed.
+- **Teach-by-driving routes:** a caregiver drives a route once with the arrow keys and saves it as "Kitchen"; afterwards the user picks it by EEG. Use case: setting up a new home in minutes.
+- **Live brain bars:** the SSVEP screen shows each target's signal strength rising as the user looks at it, so judges can see the decoding happen.
+- Also from earlier: drowsiness/eyes-closed auto-pause from occipital alpha (5.4x jump eyes closed in the recording), caregiver dashboard + SOS notification, 3-minute TRCA calibration and moving the 12 Hz target, UNO Q LED matrix as a status display (arrows / STOP / alert).
+
 ## Things AI has made newly possible (pitch framing: "this wasn't feasible 10 years ago")
 - **LLM-boosted communication** (idea 2): older word prediction was simple statistics; LLMs can expand abbreviations and propose whole replies (Google SpeakFaster, ALS eye-gaze users).
 - **Phone-camera form tracking** (4b): real-time pose estimation on a phone, where this used to need Kinect or motion-capture hardware.
